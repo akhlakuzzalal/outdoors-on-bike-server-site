@@ -3,6 +3,8 @@ const cors = require('cors');
 const { MongoClient } = require('mongodb');
 const ObjectID = require('mongodb').ObjectId
 require('dotenv').config();
+const stripe = require("stripe")(process.env.STRIPE_SECRETE);
+
 
 const port = process.env.PORT || 4000;
 
@@ -71,6 +73,22 @@ async function run() {
          const result = await userOrders.updateOne(filter, updateDoc, option);
          res.json(result);
       })
+
+      // Update Orders Stutus
+      app.put('/payment/:id', async (req, res) => {
+         const id = req.params.id;
+         const payment = req.body.price;
+         console.log("paid", payment);
+         const filter = { _id: ObjectID(id) };
+         const option = { upsert: true };
+         const updateDoc = {
+            $set: {
+               payment: `${payment}`
+            }
+         };
+         const result = await userOrders.updateOne(filter, updateDoc, option);
+         res.json(result);
+      })
       // add user on Db
       app.put('/users', async (req, res) => {
          const user = req.body;
@@ -86,6 +104,14 @@ async function run() {
          res.json(result);
       });
 
+      // Get Single order
+      app.get('/orders/:id', async (req, res) => {
+         const id = req.params.id;
+         const query = { _id: ObjectID(id) }
+         const cursor = userOrders.find(query);
+         const result = await cursor.toArray();
+         res.json(result);
+      })
       // Get Bikes
       app.get('/bikes', async (req, res) => {
          const cursor = bikesCollection.find({});
@@ -142,7 +168,23 @@ async function run() {
          res.json(result);
       })
 
+      // Stripe BAckend
+      app.post("/create-payment-intent", async (req, res) => {
+         const items = req.body;
+         // Create a PaymentIntent with the order amount and currency
+         const paymentIntent = await stripe.paymentIntents.create({
+            amount: items.price * 100,
+            currency: "usd",
+            automatic_payment_methods: {
+               enabled: true,
+            }
+         });
+
+         res.json({ clientSecret: paymentIntent.client_secret });
+      });
+
    }
+
    finally {
       // await client.close();
    }
